@@ -1,6 +1,6 @@
 FROM rust:1.51 as builder
 
-RUN USER=root cargo new --bin em-liquid
+RUN USER=root cargo new --vcs none --bin em-liquid
 WORKDIR ./em-liquid
 COPY ./Cargo.toml ./Cargo.toml
 RUN cargo build --release
@@ -18,7 +18,7 @@ RUN apt-get update \
     && apt-get install -y ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 8081
+EXPOSE 8102
 
 ENV TZ=Etc/UTC \
     APP_USER=appuser
