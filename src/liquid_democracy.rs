@@ -1,40 +1,37 @@
 use ndarray::{concatenate, s, Array, Array2, Axis};
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
-use vote::{TopicInfo, Votes};
+use vote::{Topic, VoteInfo};
 
 const ITERATION: u32 = 10_000;
 
 #[derive(Debug)]
 pub struct LiquidDemocracy {
-    info: TopicInfo,
+    info: VoteInfo,
 }
 
 pub type LDResult = ((HashMap<Uuid, f64>), (HashMap<Uuid, f64>));
 
 impl LiquidDemocracy {
-    pub fn new(info: TopicInfo) -> Self {
+    pub fn new(info: VoteInfo) -> Self {
         Self { info }
     }
 
     pub fn create_matrix(&self) -> Array2<f64> {
-        let mut d_to_p: Array2<f64> = Array::zeros((
-            self.info.delegates.len() + self.info.policies.len(),
-            self.info.delegates.len(),
-        ));
+        let num_delegates = self.info.delegates.len();
+        let num_policies = self.info.policies.len();
 
-        for (x, (did, _name)) in self.info.delegates.iter().enumerate() {
-            let mut votes = self.info.votes.get(did).unwrap().to_owned();
+        let mut d_to_p: Array2<f64> = Array::zeros((num_delegates + num_policies, num_delegates));
+
+        for (x, did) in self.info.delegates.iter().enumerate() {
+            println!("{}", did);
+            let votes = self.info.votes.get(did).unwrap().to_owned();
 
             for (to, v) in votes {
-                let y = match self.info.delegates.iter().position(|(p, _)| p == &to) {
+                let y = match self.info.delegates.iter().position(|p| p == &to) {
                     Some(p) => p,
                     None => {
-                        self.info
-                            .policies
-                            .iter()
-                            .position(|(p, _)| p == &to)
-                            .unwrap()
+                        self.info.policies.iter().position(|p| p == &to).unwrap()
                             + self.info.delegates.len()
                     }
                 };
@@ -51,7 +48,7 @@ impl LiquidDemocracy {
         concatenate![Axis(1), d_to_p, left.t()]
     }
 
-    pub fn calculate(&self) -> LDResult {
+    pub async fn calculate(&self) -> LDResult {
         let matrix = self.create_matrix();
 
         let edge = matrix.shape()[0];
@@ -69,27 +66,15 @@ impl LiquidDemocracy {
             .slice(s![self.info.delegates.len()..])
             .to_vec();
 
-        let poll_result: HashMap<Uuid, f64> = self
-            .info
-            .policies
-            .iter()
-            .map(|(pid, _)| pid)
-            .cloned()
-            .zip(results)
-            .collect();
+        let poll_result: HashMap<Uuid, f64> =
+            self.info.policies.iter().cloned().zip(results).collect();
 
         let sum = sum.slice(s![..self.info.delegates.len(), ..self.info.delegates.len()]);
         let sum_row = sum.sum_axis(Axis(1));
         let influence = (sum_row / sum.diag()).to_vec();
 
-        let influence: HashMap<Uuid, f64> = self
-            .info
-            .delegates
-            .iter()
-            .map(|(did, _)| did)
-            .cloned()
-            .zip(influence)
-            .collect();
+        let influence: HashMap<Uuid, f64> =
+            self.info.delegates.iter().cloned().zip(influence).collect();
 
         (poll_result, influence)
     }
@@ -100,86 +85,50 @@ mod liquid_test {
 
     use super::*;
 
-    fn breakfast() -> TopicInfo {
-        let minori = (Uuid::new_v4(), "minori".to_string());
-        let yasushi = (Uuid::new_v4(), "yasushi".to_string());
-        let ray = (Uuid::new_v4(), "ray".to_string());
+    fn breakfast() -> Topic {
+        let mut topic = Topic::new("breakfast", "what to eat in the morning");
 
-        let delegates: Vec<(Uuid, String)> =
-            vec![minori.to_owned(), yasushi.to_owned(), ray.to_owned()]
-                .iter()
-                .cloned()
-                .collect();
+        let minori = topic.add_new_delegate("minori").unwrap();
+        let yasushi = topic.add_new_delegate("yasushi").unwrap();
+        let ray = topic.add_new_delegate("ray").unwrap();
 
-        let bread = (Uuid::new_v4(), "bread".to_string());
-        let rice = (Uuid::new_v4(), "rice".to_string());
+        let bread = topic.add_new_policy("bread").unwrap();
+        let rice = topic.add_new_policy("rice").unwrap();
 
-        let policies: Vec<(Uuid, String)> = vec![bread.to_owned(), rice.to_owned()]
-            .iter()
-            .cloned()
-            .collect();
+        topic.cast_vote_to(&minori, &yasushi, 0.1);
+        topic.cast_vote_to(&minori, &ray, 0.1);
+        topic.cast_vote_to(&minori, &rice, 0.1);
+        topic.cast_vote_to(&minori, &bread, 0.7);
 
-        let minori_votes = [
-            (yasushi.0.to_owned(), 0.1),
-            (ray.0.to_owned(), 0.1),
-            (rice.0.to_owned(), 0.1),
-            (bread.0.to_owned(), 0.7),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        topic.cast_vote_to(&yasushi, &minori, 0.2);
+        topic.cast_vote_to(&yasushi, &ray, 0.3);
+        topic.cast_vote_to(&yasushi, &rice, 0.5);
 
-        let yasushi_votes = [
-            (minori.0.to_owned(), 0.2),
-            (ray.0.to_owned(), 0.3),
-            (rice.0.to_owned(), 0.5),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        topic.cast_vote_to(&ray, &minori, 0.4);
+        topic.cast_vote_to(&ray, &yasushi, 0.4);
+        topic.cast_vote_to(&ray, &bread, 0.2);
 
-        let ray_votes = [
-            (minori.0.to_owned(), 0.4),
-            (yasushi.0.to_owned(), 0.4),
-            (bread.0.to_owned(), 0.2),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        let votes: Votes = vec![
-            (minori.0.to_owned(), minori_votes),
-            (yasushi.0.to_owned(), yasushi_votes),
-            (ray.0.to_owned(), ray_votes),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        TopicInfo {
-            title: "what to eat for breakfast".to_string(),
-            id: Uuid::new_v4(),
-            delegates,
-            policies,
-            votes,
-        }
+        topic
     }
 
     #[test]
     fn matrix_shape() {
         let breakfast = breakfast();
-        let liq = LiquidDemocracy::new(breakfast.to_owned());
+
+        let info: VoteInfo = breakfast.into();
+        let liq = LiquidDemocracy::new(info);
         let matrix = liq.create_matrix();
 
         assert_eq!(matrix.shape(), &[5, 5]);
     }
 
-    #[test]
-    fn simple() {
+    #[actix_rt::test]
+    async fn simple() {
         let bf = breakfast();
-        let liq = LiquidDemocracy::new(bf.to_owned());
+        let info: VoteInfo = bf.to_owned().into();
+        let liq = LiquidDemocracy::new(info);
 
-        let (result, influence) = liq.calculate();
+        let (result, influence) = liq.calculate().await;
 
         let bread = bf
             .get_id_by_title("bread")

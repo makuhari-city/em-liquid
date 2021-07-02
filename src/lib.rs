@@ -1,9 +1,9 @@
 mod liquid_democracy;
 
 use liquid_democracy::{LDResult, LiquidDemocracy};
-use vote::TopicInfo;
+use vote::VoteInfo;
 
-pub fn calculate(info: TopicInfo) -> LDResult {
+pub async fn calculate(info: VoteInfo) -> LDResult {
     let liq = LiquidDemocracy::new(info);
-    liq.calculate()
+    liq.calculate().await
 }
