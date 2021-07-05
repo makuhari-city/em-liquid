@@ -1,19 +1,19 @@
 use ndarray::{concatenate, s, Array, Array2, Axis};
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
-use vote::{Topic, VoteInfo};
+use vote::{TopicData, VoteData};
 
 const ITERATION: u32 = 10_000;
 
 #[derive(Debug)]
 pub struct LiquidDemocracy {
-    info: VoteInfo,
+    info: VoteData,
 }
 
 pub type LDResult = ((HashMap<Uuid, f64>), (HashMap<Uuid, f64>));
 
 impl LiquidDemocracy {
-    pub fn new(info: VoteInfo) -> Self {
+    pub fn new(info: VoteData) -> Self {
         Self { info }
     }
 
@@ -85,8 +85,8 @@ mod liquid_test {
 
     use super::*;
 
-    fn breakfast() -> Topic {
-        let mut topic = Topic::new("breakfast", "what to eat in the morning");
+    fn breakfast() -> TopicData {
+        let mut topic = TopicData::new("breakfast", "what to eat in the morning");
 
         let minori = topic.add_new_delegate("minori").unwrap();
         let yasushi = topic.add_new_delegate("yasushi").unwrap();
@@ -115,7 +115,7 @@ mod liquid_test {
     fn matrix_shape() {
         let breakfast = breakfast();
 
-        let info: VoteInfo = breakfast.into();
+        let info: VoteData = breakfast.into();
         let liq = LiquidDemocracy::new(info);
         let matrix = liq.create_matrix();
 
@@ -125,7 +125,7 @@ mod liquid_test {
     #[actix_rt::test]
     async fn simple() {
         let bf = breakfast();
-        let info: VoteInfo = bf.to_owned().into();
+        let info: VoteData = bf.to_owned().into();
         let liq = LiquidDemocracy::new(info);
 
         let (result, influence) = liq.calculate().await;
