@@ -23,9 +23,11 @@ impl LiquidDemocracy {
 
         let mut d_to_p: Array2<f64> = Array::zeros((num_delegates + num_policies, num_delegates));
 
+        let votes = self.info.normalized();
+
         for (x, did) in self.info.delegates.iter().enumerate() {
             println!("{}", did);
-            let votes = self.info.votes.get(did).unwrap().to_owned();
+            let votes = votes.get(did).unwrap().to_owned();
 
             for (to, v) in votes {
                 let y = match self.info.delegates.iter().position(|p| p == &to) {
@@ -49,6 +51,8 @@ impl LiquidDemocracy {
     }
 
     pub async fn calculate(&self) -> LDResult {
+        // we want to  normalize the values first
+
         let matrix = self.create_matrix();
 
         let edge = matrix.shape()[0];
