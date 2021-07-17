@@ -1,5 +1,5 @@
 use ndarray::{concatenate, s, Array, Array2, Axis};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use uuid::Uuid;
 use vote::{TopicData, VoteData};
 
@@ -27,7 +27,11 @@ impl LiquidDemocracy {
 
         for (x, did) in self.info.delegates.iter().enumerate() {
             println!("{}", did);
-            let votes = votes.get(did).unwrap().to_owned();
+
+            let votes = match votes.get(did) {
+                Some(v) => v.to_owned(),
+                None => BTreeMap::new(),
+            };
 
             for (to, v) in votes {
                 let y = match self.info.delegates.iter().position(|p| p == &to) {
